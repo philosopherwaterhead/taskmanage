@@ -95,37 +95,49 @@ function renderTasks() {
   const request = store.getAll();
 
   request.onsuccess = () => {
-    let tasks = request.result.filter(t => t.status === currentTab);
-
-    const sortMode = document.getElementById("sortMode").value;
-
-    tasks.sort((a, b) => {
-      if (sortMode === "type") {
-        return a.type.localeCompare(b.type);
-      } else {
-        return a.genre.localeCompare(b.genre);
-      }
-    });
-
     const container = document.getElementById("taskContainer");
     container.innerHTML = "";
 
-    tasks.forEach(task => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <h3>${task.title}</h3>
-        <div>${task.type} / ${task.genre}</div>
-        <div class="card-buttons">
-          <button class="edit-btn">編集</button>
-          <button class="delete-btn">削除</button>
-        </div>
-      `;
+    let tasks = request.result.filter(t => t.status === currentTab);
+    const sortMode = document.getElementById("sortMode").value;
 
-      card.querySelector(".edit-btn").onclick = () => openForm(task);
-      card.querySelector(".delete-btn").onclick = () => deleteTask(task.id);
+    let groups = {};
 
-      container.appendChild(card);
+    if (sortMode === "type") {
+      groups = { "編集": [], "執筆": [] };
+      tasks.forEach(t => groups[t.type]?.push(t));
+    } else {
+      groups = { "動画": [], "物語": [] };
+      tasks.forEach(t => groups[t.genre]?.push(t));
+    }
+
+    Object.keys(groups).forEach(groupName => {
+      if (groups[groupName].length === 0) return;
+
+      // 見出し作成
+      const header = document.createElement("h2");
+      header.className = "group-header";
+      header.textContent = groupName;
+      container.appendChild(header);
+
+      // カード作成
+      groups[groupName].forEach(task => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <h3>${task.title}</h3>
+          <div>${task.type} / ${task.genre}</div>
+          <div class="card-buttons">
+            <button class="edit-btn">編集</button>
+            <button class="delete-btn">削除</button>
+          </div>
+        `;
+
+        card.querySelector(".edit-btn").onclick = () => openForm(task);
+        card.querySelector(".delete-btn").onclick = () => deleteTask(task.id);
+
+        container.appendChild(card);
+      });
     });
   };
 }
