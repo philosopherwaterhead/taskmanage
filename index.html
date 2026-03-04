@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Board</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <meta name="theme-color" content="#2c3e50" />
+</head>
+<body>
+
+<header>
+  <h1>Task Board</h1>
+  <select id="sortMode" onchange="renderTasks()">
+    <option value="type" selected>編集 / 執筆</option>
+    <option value="genre">動画 / 物語</option>
+  </select>
+</header>
+
+<nav class="tabs">
+  <button id="tab-inprogress" onclick="switchTab('inprogress')">進行中</button>
+  <button id="tab-preparing" onclick="switchTab('preparing')">準備中</button>
+</nav>
+
+<section id="taskContainer"></section>
+
+<button class="fab" onclick="openForm()">＋</button>
+
+<!-- モーダル -->
+<div id="modal" class="modal hidden">
+  <div class="modal-content">
+    <form id="taskForm">
+      <input type="hidden" id="taskId" />
+      <input type="text" id="title" placeholder="タスク名" required />
+
+      <div>
+        <label><input type="radio" name="type" value="編集" checked> 編集</label>
+        <label><input type="radio" name="type" value="執筆"> 執筆</label>
+      </div>
+
+      <div>
+        <label><input type="radio" name="genre" value="動画" checked> 動画</label>
+        <label><input type="radio" name="genre" value="物語"> 物語</label>
+      </div>
+
+      <select id="status">
+        <option value="inprogress">進行中</option>
+        <option value="preparing">準備中</option>
+      </select>
+
+      <div class="modal-buttons">
+        <button type="submit">保存</button>
+        <button type="button" onclick="closeForm()">キャンセル</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
