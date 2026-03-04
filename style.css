@@ -103,3 +103,10 @@ header {
   display: flex;
   justify-content: space-between;
 }
+
+.group-header {
+  margin: 20px 0 5px 5px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #34495e;
+}
