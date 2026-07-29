@@ -566,18 +566,6 @@ async function renderTasks() {
       card.dataset.taskId =
         String(task.id);
 
-      const dragHandle =
-        document.createElement("div");
-
-      dragHandle.className =
-        "drag-handle";
-
-      dragHandle.textContent = "☰";
-      dragHandle.setAttribute(
-        "aria-label",
-        "長押しして並べ替え"
-      );
-
       const title =
         document.createElement("h3");
 
@@ -630,7 +618,6 @@ async function renderTasks() {
       );
 
       card.append(
-        dragHandle,
         title,
         metadata,
         buttons
@@ -647,13 +634,14 @@ async function renderTasks() {
     new Sortable(groupList, {
       animation: 150,
 
-      handle: ".drag-handle",
-
       ghostClass: "sortable-ghost",
 
       chosenClass: "sortable-chosen",
 
       dragClass: "sortable-drag",
+
+      filter: "button, input, select, textarea, a",
+      preventOnFilter: false,
 
       /*
        * スマートフォンでは少し長押ししてから
