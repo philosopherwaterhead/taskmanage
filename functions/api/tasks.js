@@ -17,22 +17,21 @@ export async function onRequestGet(context) {
           type,
           genre,
           status,
-          sort_order,
+          sort_order_type,
+          sort_order_genre,
           created_at,
           updated_at
         FROM tasks
-        ORDER BY
-          status ASC,
-          type ASC,
-          genre ASC,
-          sort_order ASC,
-          created_at ASC
+        ORDER BY created_at ASC
       `)
       .all();
 
     return json(result.results);
   } catch (error) {
-    console.error("GET /api/tasks failed:", error);
+    console.error(
+      "GET /api/tasks failed:",
+      error
+    );
 
     return json(
       { error: "Failed to load tasks" },
@@ -45,10 +44,17 @@ export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
 
-    const title = String(body.title ?? "").trim();
-    const type = String(body.type ?? "").trim();
-    const genre = String(body.genre ?? "").trim();
-    const status = String(body.status ?? "").trim();
+    const title =
+      String(body.title ?? "").trim();
+
+    const type =
+      String(body.type ?? "").trim();
+
+    const genre =
+      String(body.genre ?? "").trim();
+
+    const status =
+      String(body.status ?? "").trim();
 
     if (!title || !type || !genre || !status) {
       return json(
@@ -61,41 +67,51 @@ export async function onRequestPost(context) {
     }
 
     const id =
-      typeof body.id === "string" && body.id.trim()
+      typeof body.id === "string" &&
+      body.id.trim()
         ? body.id.trim()
         : crypto.randomUUID();
 
-    /*
-     * 同じ表示グループ内の末尾へ追加する。
-     *
-     * 既存の最大sort_orderが5なら、新規タスクは6。
-     * 同じグループにタスクがなければ0。
-     */
-    const orderResult = await context.env.DB
-      .prepare(`
-        SELECT
-          COALESCE(MAX(sort_order), -1) + 1
-            AS next_sort_order
-        FROM tasks
-        WHERE status = ?
-          AND type = ?
-          AND genre = ?
-      `)
-      .bind(
-        status,
-        type,
-        genre
-      )
-      .first();
+    const typeOrderResult =
+      await context.env.DB
+        .prepare(`
+          SELECT
+            COALESCE(
+              MAX(sort_order_type),
+              -1
+            ) + 1 AS next_order
+          FROM tasks
+          WHERE status = ?
+            AND type = ?
+        `)
+        .bind(status, type)
+        .first();
 
-    const sortOrder =
-      Number(orderResult?.next_sort_order ?? 0);
+    const genreOrderResult =
+      await context.env.DB
+        .prepare(`
+          SELECT
+            COALESCE(
+              MAX(sort_order_genre),
+              -1
+            ) + 1 AS next_order
+          FROM tasks
+          WHERE status = ?
+            AND genre = ?
+        `)
+        .bind(status, genre)
+        .first();
 
-    /*
-     * 現在のDBではcreated_atとupdated_atを
-     * 秒単位で保存しているため、ここも秒単位に統一。
-     */
-    const now = Math.floor(Date.now() / 1000);
+    const sortOrderType = Number(
+      typeOrderResult?.next_order ?? 0
+    );
+
+    const sortOrderGenre = Number(
+      genreOrderResult?.next_order ?? 0
+    );
+
+    const now =
+      Math.floor(Date.now() / 1000);
 
     await context.env.DB
       .prepare(`
@@ -105,11 +121,12 @@ export async function onRequestPost(context) {
           type,
           genre,
           status,
-          sort_order,
+          sort_order_type,
+          sort_order_genre,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         id,
@@ -117,7 +134,8 @@ export async function onRequestPost(context) {
         type,
         genre,
         status,
-        sortOrder,
+        sortOrderType,
+        sortOrderGenre,
         now,
         now
       )
@@ -130,7 +148,8 @@ export async function onRequestPost(context) {
         type,
         genre,
         status,
-        sort_order: sortOrder,
+        sort_order_type: sortOrderType,
+        sort_order_genre: sortOrderGenre,
         created_at: now,
         updated_at: now
       },
@@ -150,7 +169,9 @@ export async function onRequestPost(context) {
     }
 
     return json(
-      { error: "Failed to create task" },
+      {
+        error: "Failed to create task"
+      },
       500
     );
   }
