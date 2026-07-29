@@ -67,6 +67,10 @@ function replaceTaskCache(tasks) {
         type: task.type,
         genre: task.genre,
         status: task.status,
+        sort_order_type:
+          Number(task.sort_order_type ?? 0),
+        sort_order_genre:
+          Number(task.sort_order_genre ?? 0),
         created_at: task.created_at,
         updated_at: task.updated_at
       });
@@ -177,6 +181,23 @@ function updateCloudTask(id, task) {
 function deleteCloudTask(id) {
   return apiRequest(`/${encodeURIComponent(id)}`, {
     method: "DELETE"
+  });
+}
+
+function reorderCloudTasks({
+  status,
+  mode,
+  group,
+  ids
+}) {
+  return apiRequest("/reorder", {
+    method: "PUT",
+    body: JSON.stringify({
+      status,
+      mode,
+      group,
+      ids
+    })
   });
 }
 
@@ -435,10 +456,13 @@ async function renderTasks() {
     return;
   }
 
-  const allTasks = await getAllTasksFromCache();
+  const allTasks =
+    await getAllTasksFromCache();
 
   const container =
-    document.getElementById("taskContainer");
+    document.getElementById(
+      "taskContainer"
+    );
 
   container.innerHTML = "";
 
@@ -447,7 +471,9 @@ async function renderTasks() {
   );
 
   const sortMode =
-    document.getElementById("sortMode").value;
+    document.getElementById(
+      "sortMode"
+    ).value;
 
   let groups;
 
@@ -471,39 +497,114 @@ async function renderTasks() {
     }
   }
 
+  /*
+   * 現在の表示方式に対応した
+   * 並び順を使用する。
+   */
+  const orderField =
+    sortMode === "type"
+      ? "sort_order_type"
+      : "sort_order_genre";
+
   let visibleTaskCount = 0;
 
-  for (const [groupName, groupTasks] of Object.entries(groups)) {
+  for (
+    const [groupName, groupTasks]
+    of Object.entries(groups)
+  ) {
     if (groupTasks.length === 0) {
       continue;
     }
 
-    visibleTaskCount += groupTasks.length;
+    groupTasks.sort((a, b) => {
+      const orderDifference =
+        Number(a[orderField] ?? 0) -
+        Number(b[orderField] ?? 0);
 
-    const header = document.createElement("h2");
+      if (orderDifference !== 0) {
+        return orderDifference;
+      }
+
+      return (
+        Number(a.created_at ?? 0) -
+        Number(b.created_at ?? 0)
+      );
+    });
+
+    visibleTaskCount +=
+      groupTasks.length;
+
+    const header =
+      document.createElement("h2");
+
     header.className = "group-header";
     header.textContent = groupName;
 
     container.appendChild(header);
 
-    for (const task of groupTasks) {
-      const card = document.createElement("div");
-      card.className = "card";
+    /*
+     * グループごとに専用のリストを作る。
+     * SortableJSはこの要素内だけで動く。
+     */
+    const groupList =
+      document.createElement("div");
 
-      const title = document.createElement("h3");
+    groupList.className =
+      "sortable-task-list";
+
+    groupList.dataset.mode = sortMode;
+    groupList.dataset.group = groupName;
+    groupList.dataset.status = currentTab;
+
+    container.appendChild(groupList);
+
+    for (const task of groupTasks) {
+      const card =
+        document.createElement("div");
+
+      card.className = "card";
+      card.dataset.taskId =
+        String(task.id);
+
+      const dragHandle =
+        document.createElement("div");
+
+      dragHandle.className =
+        "drag-handle";
+
+      dragHandle.textContent = "☰";
+      dragHandle.setAttribute(
+        "aria-label",
+        "長押しして並べ替え"
+      );
+
+      const title =
+        document.createElement("h3");
+
       title.textContent = task.title;
 
-      const metadata = document.createElement("div");
+      const metadata =
+        document.createElement("div");
+
+      metadata.className =
+        "card-metadata";
+
       metadata.textContent =
         `${task.type} / ${task.genre}`;
 
-      const buttons = document.createElement("div");
-      buttons.className = "card-buttons";
+      const buttons =
+        document.createElement("div");
 
-      const editButton = document.createElement("button");
+      buttons.className =
+        "card-buttons";
+
+      const editButton =
+        document.createElement("button");
+
       editButton.type = "button";
       editButton.className = "edit-btn";
       editButton.textContent = "編集";
+
       editButton.addEventListener(
         "click",
         () => openForm(task)
@@ -513,23 +614,133 @@ async function renderTasks() {
         document.createElement("button");
 
       deleteButton.type = "button";
-      deleteButton.className = "delete-btn";
+      deleteButton.className =
+        "delete-btn";
+
       deleteButton.textContent = "削除";
+
       deleteButton.addEventListener(
         "click",
         () => deleteTask(task.id)
       );
 
-      buttons.append(editButton, deleteButton);
-      card.append(title, metadata, buttons);
-      container.appendChild(card);
+      buttons.append(
+        editButton,
+        deleteButton
+      );
+
+      card.append(
+        dragHandle,
+        title,
+        metadata,
+        buttons
+      );
+
+      groupList.appendChild(card);
     }
+
+    /*
+     * 同じグループ内だけ並べ替え可能。
+     * groupオプションを指定していないため、
+     * 編集→執筆などの越境はできない。
+     */
+    new Sortable(groupList, {
+      animation: 150,
+
+      handle: ".drag-handle",
+
+      ghostClass: "sortable-ghost",
+
+      chosenClass: "sortable-chosen",
+
+      dragClass: "sortable-drag",
+
+      /*
+       * スマートフォンでは少し長押ししてから
+       * ドラッグを開始する。
+       */
+      delay: 180,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 4,
+
+      onStart() {
+        document.body.classList.add(
+          "is-sorting"
+        );
+      },
+
+      async onEnd() {
+        document.body.classList.remove(
+          "is-sorting"
+        );
+
+        const ids = Array
+          .from(
+            groupList.querySelectorAll(
+              ".card"
+            )
+          )
+          .map(card =>
+            card.dataset.taskId
+          )
+          .filter(Boolean);
+
+        setSyncStatus(
+          "並び順を保存中…"
+        );
+
+        try {
+          await reorderCloudTasks({
+            status:
+              groupList.dataset.status,
+            mode:
+              groupList.dataset.mode,
+            group:
+              groupList.dataset.group,
+            ids
+          });
+
+          /*
+           * サーバーから改めて取得し、
+           * IndexedDBも新順序へ更新する。
+           */
+          await syncTasks({
+            migrate: false,
+            showMessage: false
+          });
+        } catch (error) {
+          console.error(
+            "Task reorder failed:",
+            error
+          );
+
+          alert(
+            `並び順を保存できませんでした。\n${error.message}`
+          );
+
+          /*
+           * 保存失敗時はサーバー上の順番を
+           * 再取得して表示を戻す。
+           */
+          await syncTasks({
+            migrate: false,
+            showMessage: false
+          });
+        }
+      }
+    });
   }
 
   if (visibleTaskCount === 0) {
-    const emptyMessage = document.createElement("p");
-    emptyMessage.textContent = "タスクはありません。";
-    container.appendChild(emptyMessage);
+    const emptyMessage =
+      document.createElement("p");
+
+    emptyMessage.textContent =
+      "タスクはありません。";
+
+    container.appendChild(
+      emptyMessage
+    );
   }
 }
 
