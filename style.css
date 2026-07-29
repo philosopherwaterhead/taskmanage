@@ -110,3 +110,45 @@ header {
   font-weight: bold;
   color: #34495e;
 }
+
+.sortable-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 38px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  color: #555;
+  font-size: 24px;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.sortable-ghost {
+  opacity: 0.35;
+}
+
+.sortable-chosen {
+  transform: scale(1.015);
+}
+
+.sortable-drag {
+  opacity: 0.95;
+}
+
+body.is-sorting {
+  overflow: hidden;
+}
