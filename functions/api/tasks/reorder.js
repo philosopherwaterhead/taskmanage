@@ -12,30 +12,38 @@ export async function onRequestPut(context) {
     const body = await context.request.json();
 
     const status = String(body.status ?? "").trim();
-    const type = String(body.type ?? "").trim();
-    const genre = String(body.genre ?? "").trim();
+    const mode = String(body.mode ?? "").trim();
+    const group = String(body.group ?? "").trim();
     const ids = body.ids;
 
     if (
       !status ||
-      !type ||
-      !genre ||
+      !["type", "genre"].includes(mode) ||
+      !group ||
       !Array.isArray(ids) ||
-      ids.some(id => typeof id !== "string" || !id.trim())
+      ids.some(
+        id =>
+          typeof id !== "string" ||
+          !id.trim()
+      )
     ) {
       return json(
         {
-          error: "status, type, genre and ids are required"
+          error:
+            "status, mode, group and ids are required"
         },
         400
       );
     }
 
-    const uniqueIds = [...new Set(ids.map(id => id.trim()))];
+    const normalizedIds = ids.map(id => id.trim());
+    const uniqueIds = [...new Set(normalizedIds)];
 
-    if (uniqueIds.length !== ids.length) {
+    if (uniqueIds.length !== normalizedIds.length) {
       return json(
-        { error: "ids must not contain duplicates" },
+        {
+          error: "ids must not contain duplicates"
+        },
         400
       );
     }
@@ -47,31 +55,49 @@ export async function onRequestPut(context) {
       });
     }
 
+    /*
+     * SQLの列名はbindできないため、
+     * modeをホワイトリストで判定して決める。
+     */
+    const groupColumn =
+      mode === "type" ? "type" : "genre";
+
+    const orderColumn =
+      mode === "type"
+        ? "sort_order_type"
+        : "sort_order_genre";
+
     const placeholders = uniqueIds
       .map(() => "?")
       .join(", ");
 
+    /*
+     * 送られたすべてのタスクが、
+     * 同じタブ・同じ表示グループに属するか確認。
+     */
     const checkResult = await context.env.DB
       .prepare(`
         SELECT id
         FROM tasks
         WHERE status = ?
-          AND type = ?
-          AND genre = ?
+          AND ${groupColumn} = ?
           AND id IN (${placeholders})
       `)
       .bind(
         status,
-        type,
-        genre,
+        group,
         ...uniqueIds
       )
       .all();
 
-    if (checkResult.results.length !== uniqueIds.length) {
+    if (
+      checkResult.results.length !==
+      uniqueIds.length
+    ) {
       return json(
         {
-          error: "Some tasks do not belong to the selected group"
+          error:
+            "Some tasks do not belong to the selected group"
         },
         400
       );
@@ -79,26 +105,25 @@ export async function onRequestPut(context) {
 
     const now = Math.floor(Date.now() / 1000);
 
-    const statements = uniqueIds.map((id, index) =>
-      context.env.DB
-        .prepare(`
-          UPDATE tasks
-          SET
-            sort_order = ?,
-            updated_at = ?
-          WHERE id = ?
-            AND status = ?
-            AND type = ?
-            AND genre = ?
-        `)
-        .bind(
-          index,
-          now,
-          id,
-          status,
-          type,
-          genre
-        )
+    const statements = uniqueIds.map(
+      (id, index) =>
+        context.env.DB
+          .prepare(`
+            UPDATE tasks
+            SET
+              ${orderColumn} = ?,
+              updated_at = ?
+            WHERE id = ?
+              AND status = ?
+              AND ${groupColumn} = ?
+          `)
+          .bind(
+            index,
+            now,
+            id,
+            status,
+            group
+          )
     );
 
     await context.env.DB.batch(statements);
@@ -108,7 +133,10 @@ export async function onRequestPut(context) {
       updated: uniqueIds.length
     });
   } catch (error) {
-    console.error("PUT /api/tasks/reorder failed:", error);
+    console.error(
+      "PUT /api/tasks/reorder failed:",
+      error
+    );
 
     if (error instanceof SyntaxError) {
       return json(
@@ -118,7 +146,9 @@ export async function onRequestPut(context) {
     }
 
     return json(
-      { error: "Failed to reorder tasks" },
+      {
+        error: "Failed to reorder tasks"
+      },
       500
     );
   }
